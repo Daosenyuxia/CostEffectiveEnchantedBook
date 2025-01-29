@@ -8,8 +8,8 @@
 		"nwdxlgzs"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/nwdxlgzs/CostEffectiveEnchantedBook",
+		"sources": "https://github.com/nwdxlgzs/CostEffectiveEnchantedBook"
 	},
 	"license": "MIT",
 	"icon": "assets/costeffectiveenchantedbook/icon.png",
