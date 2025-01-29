@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "costeffectiveenchantedbook",
+	"version": "${version}",
+	"name": "CostEffectiveEnchantedBook",
+	"description": "薄利多销的附魔书！让新手图书管理员可以买的附魔书固定为最低正常价格和最好正常附魔等级。",
+	"authors": [
+		"nwdxlgzs"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "MIT",
+	"icon": "assets/costeffectiveenchantedbook/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.nwdxlgzs.costeffectiveenchantedbook.CostEffectiveEnchantedBook"
+		]
+	},
+	"mixins": [
+	],
+	"depends": {
+		"fabricloader": ">=0.16.10",
+		"minecraft": "~1.21.4",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}
