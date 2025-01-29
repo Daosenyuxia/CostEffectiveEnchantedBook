@@ -1,0 +1,2 @@
+# CostEffectiveEnchantedBook
+薄利多销的附魔书！让新手图书管理员可以买的附魔书固定为最低正常价格和最好正常附魔等级。
