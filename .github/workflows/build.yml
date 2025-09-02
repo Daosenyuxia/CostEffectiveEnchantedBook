@@ -1,1 +1,72 @@
+name: costeffectiveenchantedbook
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
 
+jobs:
+  build:
+    name: costeffectiveenchantedbook
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 步骤1: 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # 步骤2: 设置 JDK 21
+    - name: Set up JDK 21
+      uses: actions/setup-java@v3
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    # 步骤3: 授予 gradlew 执行权限
+    - name: Make gradlew executable
+      run: chmod +x gradlew
+
+    # 步骤4: 构建项目
+    - name: Build with Gradle
+      run: ./gradlew build
+
+    # 步骤5: 测试项目
+    - name: Run tests
+      run: ./gradlew test
+
+    # 步骤6: 上传构建产物
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: fabric-mod-artifacts
+        path: |
+          build/libs/*.jar
+          build/reports/tests/test/
+        retention-days: 7
+
+    # 步骤7: 缓存构建结果（可选）
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    # 步骤8: 生成构建摘要
+    - name: Generate build summary
+      run: |
+        echo "### 🎯 构建摘要" >> $GITHUB_STEP_SUMMARY
+        echo "- **构建状态**: ✅ 成功" >> $GITHUB_STEP_SUMMARY
+        echo "- **Minecraft 版本**: 1.21.8" >> $GITHUB_STEP_SUMMARY
+        echo "- **Fabric API 版本**: 0.133.0+1.21.8" >> $GITHUB_STEP_SUMMARY
+        echo "- **构建时间**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 构建产物" >> $GITHUB_STEP_SUMMARY
+        ls -la build/libs/ >> $GITHUB_STEP_SUMMARY
