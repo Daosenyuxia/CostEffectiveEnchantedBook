@@ -77,7 +77,7 @@ public class CostEffectiveEnchantedBook implements ModInitializer {
         }
 
         public TradeOffer create(Entity entity, Random random) {
-            Optional<RegistryEntry<Enchantment>> optional = entity.getWorld().getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getRandomEntry(this.possibleEnchantments, random);
+            Optional<RegistryEntry<Enchantment>> optional = entity.getEntityWorld().getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getRandomEntry(this.possibleEnchantments, random);
             int l;
             ItemStack itemStack;
             if (optional.isPresent()) {
