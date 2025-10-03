@@ -1,3 +1,3 @@
 # CostEffectiveEnchantedBook
 薄利多销的附魔书！让新手图书管理员可以买的附魔书固定为最低正常价格和最好正常附魔等级。
-非常喜欢这个mod，但它暂时没有比较新的版本，于是升级将nwdxlgzs的CostEffectEnchantedBook升级到了最新版本，非常感谢原作者nwdxlgzs制作出这个优质的mod!
+本人非常喜欢这个Mod，但它暂时没有比较新的版本，于是升级将nwdxlgzs的CostEffectEnchantedBook升级到了最新版本，非常感谢原作者nwdxlgzs制作出这个优质的Mod!
