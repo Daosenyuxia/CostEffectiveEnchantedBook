@@ -9,6 +9,7 @@ import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.EnchantmentLevelEntry;
 import net.minecraft.entity.Entity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKeys;
@@ -38,7 +39,6 @@ public class CostEffectiveEnchantedBook implements ModInitializer {
         Int2ObjectMap<TradeOffers.Factory[]> librarian = TradeOffers.PROFESSION_TO_LEVELED_TRADE.get(VillagerProfession.LIBRARIAN);
         //只更改新手交易列表，其他等级沿用原版逻辑（万一谁需要低等级附魔书呢，不会吧？）
         TradeOffers.Factory[] librarian_level1 = librarian.get(1);
-        //替换掉TradeOffers.EnchantBookFactory类
         int origIdx = -1;
         boolean findSelf = false;
         for (int i = 0; i < librarian_level1.length; ++i) {
@@ -76,21 +76,17 @@ public class CostEffectiveEnchantedBook implements ModInitializer {
             this.possibleEnchantments = possibleEnchantments;
         }
 
-        public TradeOffer create(Entity entity, Random random) {
-            Optional<RegistryEntry<Enchantment>> optional = entity.getEntityWorld().getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getRandomEntry(this.possibleEnchantments, random);
+        public TradeOffer create(ServerWorld world, Entity entity, Random random) {
+            Optional<RegistryEntry<Enchantment>> optional = world.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getRandomEntry(this.possibleEnchantments, random);
             int l;
             ItemStack itemStack;
             if (optional.isPresent()) {
                 RegistryEntry<Enchantment> registryEntry = optional.get();
                 Enchantment enchantment = registryEntry.value();
                 //删除随机等级，默认最高等级
-//                int i = Math.max(enchantment.getMinLevel(), this.minLevel);
-//                int j = Math.min(enchantment.getMaxLevel(), this.maxLevel);
-//                int k = MathHelper.nextInt(random, i, j);
                 int k = Math.min(enchantment.getMaxLevel(), this.maxLevel);
                 itemStack = EnchantmentHelper.getEnchantedBookWith(new EnchantmentLevelEntry(registryEntry, k));
                 //删除随机加价
-//                 l = 2 + random.nextInt(5 + k * 10) + 3 * k;
                 l = 2 + 3 * k;
                 if (registryEntry.isIn(EnchantmentTags.DOUBLE_TRADE_PRICE)) {
                     l *= 2;
