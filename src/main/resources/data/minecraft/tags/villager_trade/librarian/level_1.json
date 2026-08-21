@@ -1,0 +1,8 @@
+{
+  "replace": true,
+  "values": [
+    "minecraft:librarian/1/paper_emerald",
+    "costeffectiveenchantedbook:librarian/1/max_enchanted_book",
+    "minecraft:librarian/1/emerald_bookshelf"
+  ]
+}

@@ -1,104 +1,130 @@
 package com.nwdxlgzs.costeffectiveenchantedbook;
 
-import com.google.common.collect.ImmutableMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.fabricmc.api.ModInitializer;
-
-import net.minecraft.block.Blocks;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.enchantment.EnchantmentLevelEntry;
-import net.minecraft.entity.Entity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.tag.EnchantmentTags;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.village.TradeOffer;
-import net.minecraft.village.TradeOffers;
-import net.minecraft.village.TradedItem;
-import net.minecraft.village.VillagerProfession;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryCodecs;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.functions.LootItemConditionalFunction;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
+/**
+ * 薄利多销的附魔书！
+ * <p>
+ * 26.1 起村民交易改为数据驱动（data/{namespace}/villager_trade + trade_set + tags/villager_trade），
+ * 本 Mod 不再修改 TradeOffers 代码表，而是：
+ * 1. 在代码中注册自定义战利品函数 costeffectiveenchantedbook:enchant_book_max_level，
+ *    该函数从 #minecraft:tradeable 随机选择附魔并固定为最高等级，
+ *    同时把价格固定为最低正常价格：2 + 3 * 等级（double_trade_price 翻倍，上限 64）。
+ * 2. 通过内嵌数据包把图书管理员的 1 级附魔书交易替换为该自定义交易。
+ */
 public class CostEffectiveEnchantedBook implements ModInitializer {
-    public static final String MOD_ID = "costeffectiveenchantedbook";
-    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+	public static final String MOD_ID = "costeffectiveenchantedbook";
+	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    @Override
-    public void onInitialize() {
-        LOGGER.info("Load:薄利多销的附魔书");
-        Int2ObjectMap<TradeOffers.Factory[]> librarian = TradeOffers.PROFESSION_TO_LEVELED_TRADE.get(VillagerProfession.LIBRARIAN);
-        //只更改新手交易列表，其他等级沿用原版逻辑（万一谁需要低等级附魔书呢，不会吧？）
-        TradeOffers.Factory[] librarian_level1 = librarian.get(1);
-        int origIdx = -1;
-        boolean findSelf = false;
-        for (int i = 0; i < librarian_level1.length; ++i) {
-            if (librarian_level1[i] instanceof TradeOffers.EnchantBookFactory) {
-                origIdx = i;
-            } else if (librarian_level1[i] instanceof CostEffectiveEnchantBookFactory) {
-                findSelf = true;
-            }
-        }
-        if (!findSelf) {
-            CostEffectiveEnchantBookFactory factory = new CostEffectiveEnchantBookFactory(1, EnchantmentTags.TRADEABLE);
-            if (origIdx != -1) {
-                librarian_level1[origIdx] = factory;
-            } else {
-                ArrayList<TradeOffers.Factory> list = new ArrayList<>(Arrays.asList(librarian_level1));
-                list.add(factory);
-                librarian_level1 = list.toArray(new TradeOffers.Factory[0]);
-                librarian.put(1, librarian_level1);
-            }
-        }
-    }
+	@Override
+	public void onInitialize() {
+		// 26.2 中战利品函数类型直接注册 MapCodec（不再有 LootItemFunctionType 包装类）
+		Registry.register(
+			BuiltInRegistries.LOOT_FUNCTION_TYPE,
+			Identifier.fromNamespaceAndPath(MOD_ID, "enchant_book_max_level"),
+			EnchantBookMaxLevelFunction.MAP_CODEC
+		);
+		LOGGER.info("Load:薄利多销的附魔书 (Minecraft 26.2)");
+	}
 
-    public static class CostEffectiveEnchantBookFactory implements TradeOffers.Factory {
-        private final int experience;
-        private final TagKey<Enchantment> possibleEnchantments;
-        private final int maxLevel;
+	/**
+	 * 类似原版 enchant_randomly，但附魔等级固定为该附魔的最高等级，
+	 * 并把 ADDITIONAL_TRADE_COST 固定为最低价格：2 + 3 * 等级，
+	 * 若附魔位于 #minecraft:double_trade_price 则翻倍，最终上限 64。
+	 */
+	public static class EnchantBookMaxLevelFunction extends LootItemConditionalFunction {
+		public static final MapCodec<EnchantBookMaxLevelFunction> MAP_CODEC = RecordCodecBuilder.mapCodec(instance ->
+			commonFields(instance).and(instance.group(
+				RegistryCodecs.homogeneousList(Registries.ENCHANTMENT)
+					.optionalFieldOf("options")
+					.forGetter(function -> function.options),
+				Codec.INT.optionalFieldOf("max_level", Integer.MAX_VALUE)
+					.forGetter(function -> function.maxLevel),
+				Codec.BOOL.optionalFieldOf("include_additional_cost_component", true)
+					.forGetter(function -> function.includeAdditionalCostComponent)
+			)).apply(instance, EnchantBookMaxLevelFunction::new)
+		);
 
-        public CostEffectiveEnchantBookFactory(int experience, TagKey<Enchantment> possibleEnchantments) {
-            this(experience, Integer.MAX_VALUE, possibleEnchantments);
-        }
+		private final Optional<HolderSet<Enchantment>> options;
+		private final int maxLevel;
+		private final boolean includeAdditionalCostComponent;
 
-        public CostEffectiveEnchantBookFactory(int experience, int maxLevel, TagKey<Enchantment> possibleEnchantments) {
-            this.maxLevel = maxLevel;
-            this.experience = experience;
-            this.possibleEnchantments = possibleEnchantments;
-        }
+		private EnchantBookMaxLevelFunction(
+			List<LootItemCondition> conditions,
+			Optional<HolderSet<Enchantment>> options,
+			int maxLevel,
+			boolean includeAdditionalCostComponent
+		) {
+			super(conditions);
+			this.options = options;
+			this.maxLevel = maxLevel;
+			this.includeAdditionalCostComponent = includeAdditionalCostComponent;
+		}
 
-        public TradeOffer create(ServerWorld world, Entity entity, Random random) {
-            Optional<RegistryEntry<Enchantment>> optional = world.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getRandomEntry(this.possibleEnchantments, random);
-            int l;
-            ItemStack itemStack;
-            if (optional.isPresent()) {
-                RegistryEntry<Enchantment> registryEntry = optional.get();
-                Enchantment enchantment = registryEntry.value();
-                //删除随机等级，默认最高等级
-                int k = Math.min(enchantment.getMaxLevel(), this.maxLevel);
-                itemStack = EnchantmentHelper.getEnchantedBookWith(new EnchantmentLevelEntry(registryEntry, k));
-                //删除随机加价
-                l = 2 + 3 * k;
-                if (registryEntry.isIn(EnchantmentTags.DOUBLE_TRADE_PRICE)) {
-                    l *= 2;
-                }
-                if (l > 64) {
-                    l = 64;
-                }
-            } else {
-                l = 1;
-                itemStack = new ItemStack(Items.BOOK);
-            }
-            return new TradeOffer(new TradedItem(Items.EMERALD, l), Optional.of(new TradedItem(Items.BOOK)), itemStack, 12, this.experience, 0.2F);
-        }
-    }
+		@Override
+		protected ItemStack run(ItemStack stack, LootContext context) {
+			// 选择候选附魔：优先使用 options（我们的交易传 #minecraft:tradeable），否则全部附魔
+			HolderSet<Enchantment> candidates = this.options.orElseGet(() ->
+				context.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(EnchantmentTags.TRADEABLE)
+			);
+
+			Optional<Holder<Enchantment>> optional = candidates.getRandomElement(context.getRandom());
+			if (optional.isEmpty()) {
+				// 与原版逻辑一致：找不到可用附魔时，卖一本普通书，价格固定为 1 绿宝石
+				ItemStack fallback = new ItemStack(Items.BOOK);
+				if (this.includeAdditionalCostComponent
+					&& context.hasParameter(LootContextParams.ADDITIONAL_COST_COMPONENT_ALLOWED)) {
+					fallback.set(DataComponents.ADDITIONAL_TRADE_COST, 1);
+				}
+				return fallback;
+			}
+
+			Holder<Enchantment> enchantment = optional.get();
+			// 删除随机等级，固定为最高正常等级
+			int level = Math.min(enchantment.value().getMaxLevel(), this.maxLevel);
+
+			ItemStack result = stack.is(Items.BOOK) ? new ItemStack(Items.ENCHANTED_BOOK) : stack;
+			result.enchant(enchantment, level);
+
+			// 删除随机加价：价格固定为 2 + 3 * 等级（double_trade_price 翻倍，上限 64）
+			if (this.includeAdditionalCostComponent
+				&& context.hasParameter(LootContextParams.ADDITIONAL_COST_COMPONENT_ALLOWED)) {
+				int cost = 2 + 3 * level;
+				if (enchantment.is(EnchantmentTags.DOUBLE_TRADE_PRICE)) {
+					cost *= 2;
+				}
+				result.set(DataComponents.ADDITIONAL_TRADE_COST, Math.min(cost, 64));
+			}
+			return result;
+		}
+
+		@Override
+		public MapCodec<? extends LootItemConditionalFunction> codec() {
+			return MAP_CODEC;
+		}
+	}
 }
