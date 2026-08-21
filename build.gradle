@@ -16,6 +16,17 @@ repositories {
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
 	// for more information about repositories.
+
+	// 回退镜像：Maven Central 会对部分 CI 网络(如 GitHub Actions 运行器)返回 403 Forbidden
+	// （见 https://github.com/actions/runner/issues/4180），按顺序自动降级到以下镜像。
+	maven {
+		name = 'Aliyun'
+		url = 'https://maven.aliyun.com/repository/public'
+	}
+	maven {
+		name = 'Google Maven Central Mirror'
+		url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+	}
 }
 
 dependencies {

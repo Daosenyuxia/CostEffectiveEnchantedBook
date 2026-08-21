@@ -6,5 +6,15 @@ pluginManagement {
 		}
 		mavenCentral()
 		gradlePluginPortal()
+		// 回退镜像：Maven Central / Plugin Portal 会对部分 CI 网络(如 GitHub Actions 运行器)
+		// 返回 403 Forbidden（见 actions/runner#4180），按顺序自动降级到以下镜像。
+		maven {
+			name = 'Aliyun'
+			url = 'https://maven.aliyun.com/repository/public'
+		}
+		maven {
+			name = 'Google Maven Central Mirror'
+			url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+		}
 	}
 }
