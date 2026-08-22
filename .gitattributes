@@ -1,4 +1,11 @@
-# 将模组资源目录全部排除语言统计
-src/main/resources/** linguist‑vendored=true
-# 如果有docs文档文件夹也加上
-docs/** linguist‑documentation=true
+# 游戏资源文件夹，资源、语言文件、json，不参与统计
+src/main/resources/** linguist-vendored=true
+src/main/assets/** linguist-vendored=true
+
+# gradle生成、构建产物，排除
+build/** linguist-vendored=true
+.gradle/** linguist-vendored=true
+gradle/** linguist-vendored=true
+
+# 文档目录标记为文档
+docs/** linguist-documentation=true
