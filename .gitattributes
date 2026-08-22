@@ -1,0 +1,4 @@
+# 将模组资源目录全部排除语言统计
+src/main/resources/** linguist‑vendored=true
+# 如果有docs文档文件夹也加上
+docs/** linguist‑documentation=true
