@@ -7,12 +7,13 @@ import net.fabricmc.api.ModInitializer;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
-import net.minecraft.core.RegistryCodecs;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.codec.RegistryCodecs;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.util.context.ContextKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -23,8 +24,8 @@ import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 薄利多销的附魔书！
@@ -35,6 +36,13 @@ import java.util.Optional;
  *    该函数从 #minecraft:tradeable 随机选择附魔并固定为最高等级，
  *    同时把价格固定为最低正常价格：2 + 3 * 等级（double_trade_price 翻倍，上限 64）。
  * 2. 通过内嵌数据包把图书管理员的 1 级附魔书交易替换为该自定义交易。
+ * <p>
+ * 26.3 迁移要点：
+ * - 战利品函数类型注册方式不变（BuiltInRegistries.LOOT_FUNCTION_TYPE 直接注册 MapCodec），
+ *   但 JSON 中的类型字段由 function 改为 type；
+ * - RegistryCodecs 移到 net.minecraft.core.registries.codec 包，homogeneousList 更名为 holderSet；
+ * - LootItemConditionalFunction 的条件字段改为 Optional&lt;Holder&lt;LootItemCondition&gt;&gt;；
+ * - 村民交易 JSON 的 given_item_modifiers 更名为 given_item_modifier。
  */
 public class CostEffectiveEnchantedBook implements ModInitializer {
 	public static final String MOD_ID = "costeffectiveenchantedbook";
@@ -42,13 +50,13 @@ public class CostEffectiveEnchantedBook implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		// 26.2 中战利品函数类型直接注册 MapCodec（不再有 LootItemFunctionType 包装类）
+		// 战利品函数类型直接注册 MapCodec（不再有 LootItemFunctionType 包装类）
 		Registry.register(
 			BuiltInRegistries.LOOT_FUNCTION_TYPE,
 			Identifier.fromNamespaceAndPath(MOD_ID, "enchant_book_max_level"),
 			EnchantBookMaxLevelFunction.MAP_CODEC
 		);
-		LOGGER.info("Load:薄利多销的附魔书 (Minecraft 26.2)");
+		LOGGER.info("Load:薄利多销的附魔书 (Minecraft 26.3)");
 	}
 
 	/**
@@ -59,7 +67,7 @@ public class CostEffectiveEnchantedBook implements ModInitializer {
 	public static class EnchantBookMaxLevelFunction extends LootItemConditionalFunction {
 		public static final MapCodec<EnchantBookMaxLevelFunction> MAP_CODEC = RecordCodecBuilder.mapCodec(instance ->
 			commonFields(instance).and(instance.group(
-				RegistryCodecs.homogeneousList(Registries.ENCHANTMENT)
+				RegistryCodecs.holderSet(Registries.ENCHANTMENT)
 					.optionalFieldOf("options")
 					.forGetter(function -> function.options),
 				Codec.INT.optionalFieldOf("max_level", Integer.MAX_VALUE)
@@ -74,15 +82,22 @@ public class CostEffectiveEnchantedBook implements ModInitializer {
 		private final boolean includeAdditionalCostComponent;
 
 		private EnchantBookMaxLevelFunction(
-			List<LootItemCondition> conditions,
+			Optional<Holder<LootItemCondition>> condition,
 			Optional<HolderSet<Enchantment>> options,
 			int maxLevel,
 			boolean includeAdditionalCostComponent
 		) {
-			super(conditions);
+			super(condition);
 			this.options = options;
 			this.maxLevel = maxLevel;
 			this.includeAdditionalCostComponent = includeAdditionalCostComponent;
+		}
+
+		@Override
+		public Set<ContextKey<?>> getReferencedContextParams() {
+			return this.includeAdditionalCostComponent
+				? Set.of(LootContextParams.ADDITIONAL_COST_COMPONENT_ALLOWED)
+				: Set.of();
 		}
 
 		@Override
